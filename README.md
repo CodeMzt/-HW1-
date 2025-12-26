@@ -247,7 +247,8 @@ show = ToPILImage()
 # 设定对图片的归一化处理方式，并且下载数据集
 transform = transforms.Compose(
     [transforms.ToTensor(),
-     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)) 
+     # 第一个元组表示三个通道平均值，第二个元组是三个通道标准差。据此来进行高斯归一
      ])
 #定义单次训练图片数量
 batch_size = 4
@@ -289,7 +290,7 @@ import torch.nn.functional as F
 
 # torch是模块 nn是模块下的一个模块，注意
 
-#网络就是一个类，它属于父类Module，就是神经网络模型，我们要更加具体得来实现
+#网络就是一个类，它继承父类Module，就是神经网络模型，我们要更加具体得来实现
 class Net(nn.Module):
     #初始化函数，实例化的时候会调用
     def __init__(self):
@@ -350,34 +351,40 @@ print(net)
 
 ```python
 from torch import optim
-criterion = nn.CrossEntropyLoss() # 交叉熵损失函数，官方给好的
-optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9) # 使用SGD（随机梯度下降）优化，不需要知道传入的第一个参数干嘛的。需要知道lr:learning rate 学习率，决定学习步长；momentum 动量大小，或者理解为惯性大小，即保持变化一定时间内不变，可以帮助跳出局部最优解
+criterion = nn.CrossEntropyLoss() # 实例化交叉熵损失函数，官方给好的
+optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9) 
 num_epochs = 5 #定义训练 epoch 的数量，每个epoch 训练12000次
 ```
+
+- 使用SGD（随机梯度下降）优化。第一个表示传入神经网络的相关参数；lr:learning rate 学习率，决定学习步长；momentum 动量大小，或者理解为惯性大小，即保持变化一定时间内不变，可以帮助跳出局部最优解，这是使用了动量梯度下降算法。
+- 类似可以使用的优化器还有Adam
 
 ### 训练用的函数
 
 ```python
-#传入参数应该好理解吧，之前我们都讲到了（除了save_path，这个下文就是了）
+# 传入参数应该好理解吧，之前我们都讲到了（除了save_path，这个下文就是了）
 def train(trainloader, net, num_epochs, criterion, optimizer, save_path):
     for epoch in range(num_epochs):    
         #用来储存损失值
         running_loss = 0.0
         for i, data in enumerate(trainloader, 0):
+          # enumerate会把 可迭代对象 包装成 (索引, 元素) 的二元组。0表示索引从0开始
     		
             # 1. 取出数据
             inputs, labels = data
     
-            # 梯度清零，就像写草稿，我们要擦掉上一次计算留下来的痕迹，不然就乱了
+            # 梯度清零。因为梯度计算是累加上去的，不清零就乱了。
+      			# 就像写草稿，我们要擦掉上一次计算留下来的痕迹，不然就乱了
             optimizer.zero_grad()
     
             # 2. 前向计算和反向传播
             outputs = net(inputs) # 送入网络（正向传播）
             loss = criterion(outputs, labels) # 计算损失函数
+          	# 请知悉：在上面两部中，网络已经在计算图中计算好了各个梯度（auto-grad），待取用
             
             # 3. 反向传播，更新参数
-            loss.backward() # 反向传播
-            optimizer.step()
+            loss.backward() # 反向传播,计算requires_grad=True的参数的梯度
+            optimizer.step() # 根据计算图中的梯度更新参数
 
             # 下面的这段代码对于训练无实际作用，仅用于观察训练状态
             running_loss += loss.item() #迭代器取出损失值，只要知道它让我们得到了损失值就行
@@ -533,7 +540,13 @@ L2正则化直接在SGD优化器中加参数weight_decay
  optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9,weight_decay = 1e-4)
 ```
 
+$J_{\text{regularized}} = 
+\underbrace{-\frac{1}{m}\sum_{i=1}^{m}\Bigl[\,y^{(i)}\log\bigl(a^{[L](i)}\bigr)+(1-y^{(i)})\log\bigl(1-a^{[L](i)}\bigr)\Bigr]}_{\text{cross-entropy cost}}
++\underbrace{\frac{1}{m}\frac{\lambda}{2}\sum_{l}\sum_{k}\sum_{j}\bigl(W_{k,j}^{[l]}\bigr)^{2}}_{\text{L2 regularization cost}}$
+
 Dropout则需要在新Net中添加一层，具体怎么实现不需要知道，因为官方给你封装好了函数` Dropout() `
+
+- `nn.Dropout` 放在谁后面，就让谁的输出随机失活。
 
 ```python
 # TODO: 在Dropout_Net中加入dropout层
